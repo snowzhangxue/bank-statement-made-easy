@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model TaxReturn {
+  id            String   @id @default(cuid())
+  year          Int      @default(2024)
+  filingStatus  String   @default("single") // single, married_joint, married_separate, head_of_household
+  firstName     String   @default("")
+  lastName      String   @default("")
+  ssn           String   @default("")
+  address       String   @default("")
+  city          String   @default("")
+  state         String   @default("")
+  zip           String   @default("")
+  status        String   @default("in_progress") // in_progress, review, completed
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  documents      Document[]
+  extractedItems ExtractedItem[]
+  generatedForms GeneratedForm[]
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  taxReturnId String
+  taxReturn   TaxReturn @relation(fields: [taxReturnId], references: [id], onDelete: Cascade)
+  fileName    String
+  fileType    String   // pdf, image, csv
+  filePath    String
+  fileSize    Int
+  docType     String   @default("unknown") // w2, bank_statement, receipt, 1099, csv, unknown
+  bankName    String?  // auto-detected institution/source name
+  parseStatus String   @default("pending") // pending, parsing, parsed, error
+  rawResult   String?  // raw AI response JSON
+  errorMsg    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  extractedItems ExtractedItem[]
+}
+
+model TaxCategory {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String
+  formLine    String // e.g., "1040_line1a", "schedA_line1"
+  type        String // income, deduction, credit, withholding, other
+  sortOrder   Int    @default(0)
+
+  extractedItems ExtractedItem[]
+}
+
+model ExtractedItem {
+  id          String   @id @default(cuid())
+  taxReturnId String
+  taxReturn   TaxReturn @relation(fields: [taxReturnId], references: [id], onDelete: Cascade)
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  categoryId  String?
+  category    TaxCategory? @relation(fields: [categoryId], references: [id])
+  description String
+  amount      Float
+  confidence  Float    @default(0.0) // 0-1 confidence score from AI
+  verified    Boolean  @default(false)
+  rawData     String?  // original extracted JSON
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model GeneratedForm {
+  id          String   @id @default(cuid())
+  taxReturnId String
+  taxReturn   TaxReturn @relation(fields: [taxReturnId], references: [id], onDelete: Cascade)
+  formType    String   // 1040, schedA, schedB, schedC, schedD
+  formName    String   // "Form 1040", "Schedule A", etc.
+  filePath    String
+  fieldData   String   // JSON of field name -> value mappings
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
